@@ -49,9 +49,7 @@ mod tests {
     #[test]
     fn test_char() {
         let linebreak_parser = sep_by(
-            fmap(many(none_of("\n".to_string())), |v| {
-                v.into_iter().collect::<String>()
-            }),
+            fmap(many(none_of("\n")), |v| v.into_iter().collect::<String>()),
             lf(),
         );
         let mut input = TEST_TEXT.chars();

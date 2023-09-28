@@ -37,6 +37,22 @@ pub fn satisfy(p: Rc<dyn Fn(char) -> bool>) -> Parsec<char> {
 }
 
 #[test]
+fn test_lookahead() {
+    let mut input = "你好世界".chars();
+    let p = lookahead(parse_char('你'));
+    assert_eq!(p(&mut input).unwrap(), '你');
+    assert_eq!(input.next().unwrap(), '你');
+}
+
+pub fn lookahead<T: 'static>(p: Parsec<T>) -> Parsec<T> {
+    Rc::new(move |input: &mut Chars| {
+        let mut input_clone = input.clone();
+        let result = p(&mut input_clone);
+        result
+    })
+}
+
+#[test]
 fn test_try_parse() {
     let mut input = "你好世界".chars();
     let p = try_parse(parse_char('您'));
@@ -66,6 +82,12 @@ fn test_choice() {
     let p = choice(vec![parse_char('你'), parse_char('您'), parse_char('好')]);
     assert_eq!(p(&mut input).unwrap(), '你');
     assert_eq!(p(&mut input).unwrap(), '好');
+    assert_eq!(
+        p(&mut input),
+        Err(ParsecError {
+            msg: ParsecErrorKind::UnexpectedChar('世')
+        })
+    );
 }
 
 pub fn choice<T: 'static>(ps: Vec<Parsec<T>>) -> Parsec<T> {
@@ -92,7 +114,7 @@ fn test_many() {
     );
 }
 
-pub fn many(p: Parsec<char>) -> Parsec<Vec<char>> {
+pub fn many<T: 'static>(p: Parsec<T>) -> Parsec<Vec<T>> {
     Rc::new(move |input: &mut Chars| {
         let mut result = vec![];
         loop {
@@ -143,7 +165,7 @@ fn test_skip_many() {
     assert_eq!(p2(&mut input).unwrap(), '好');
 }
 
-pub fn skip_many(p: Parsec<char>) -> Parsec<()> {
+pub fn skip_many<T: 'static>(p: Parsec<T>) -> Parsec<()> {
     Rc::new(move |input: &mut Chars| {
         let many_parser = try_parse(p.clone());
         loop {

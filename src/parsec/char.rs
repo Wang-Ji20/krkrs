@@ -16,13 +16,13 @@ pub fn parse_char(c: char) -> Parsec<char> {
 #[test]
 pub(crate) fn test_one_of() {
     let mut input = "你好世界".chars();
-    let p = one_of("你好".to_string());
+    let p = one_of("你好");
     assert_eq!(p(&mut input).unwrap(), '你');
     let mut input = "好世界".chars();
     assert_eq!(p(&mut input).unwrap(), '好');
 }
 
-pub fn one_of(cs: String) -> Parsec<char> {
+pub fn one_of(cs: &'static str) -> Parsec<char> {
     satisfy(Rc::new(move |x| cs.contains(x)))
 }
 
@@ -35,7 +35,7 @@ pub(crate) fn test_space() {
 }
 
 pub fn space() -> Parsec<char> {
-    satisfy(Rc::new(move |x| x.is_whitespace()))
+    satisfy(Rc::new(move |x| x.is_whitespace() && x != '\n'))
 }
 
 #[test]
@@ -46,15 +46,24 @@ pub(crate) fn test_spaces() {
 }
 
 pub fn spaces() -> Parsec<()> {
-    skip_many(satisfy(Rc::new(move |x| {
-        x.is_whitespace() || x == '\u{3000}'
-    })))
+    skip_many(space())
+}
+
+#[test]
+fn test_spaces_and_newlines() {
+    let mut input = "  \n你好世界".chars();
+    let p = spaces_and_newlines();
+    assert_eq!(p(&mut input).unwrap(), ());
+}
+
+pub fn spaces_and_newlines() -> Parsec<()> {
+    skip_many(choice(vec![discard(space()), discard(newline())]))
 }
 
 #[test]
 fn test_none_of() {
     let mut input = "j你好".chars();
-    let p = none_of("你好".to_string());
+    let p = none_of("你好");
     assert_eq!(p(&mut input).unwrap(), 'j');
     assert_eq!(
         p(&mut input),
@@ -64,7 +73,7 @@ fn test_none_of() {
     );
 }
 
-pub fn none_of(s: String) -> Parsec<char> {
+pub fn none_of(s: &'static str) -> Parsec<char> {
     satisfy(Rc::new(move |c: char| !s.contains(c)))
 }
 
@@ -143,21 +152,34 @@ fn test_string() {
     assert_eq!(p(&mut input).unwrap(), "你好".to_string());
 }
 
+#[test]
+fn test_string_failed() {
+    let mut input = "[".chars();
+    let p = string("[[");
+    assert_eq!(
+        p(&mut input),
+        Err(ParsecError {
+            msg: ParsecErrorKind::UnexpectedEOF
+        })
+    );
+}
+
 pub fn string(s: &'static str) -> Parsec<String> {
     Rc::new(move |input: &mut Chars| {
-        input
-            .take(s.len())
-            .zip(s.chars())
-            .map(|(x, y)| {
-                if x == y {
-                    Ok(x)
-                } else {
-                    Err(ParsecError {
-                        msg: ParsecErrorKind::UnexpectedChar(x),
-                    })
-                }
-            })
-            .collect::<Result<String, ParsecError>>()
+        if input.as_str().len() < s.len() {
+            return Err(ParsecError {
+                msg: ParsecErrorKind::UnexpectedEOF,
+            });
+        }
+        let z = input.take(s.len()).zip(s.chars());
+        for (a, b) in z {
+            if a != b {
+                return Err(ParsecError {
+                    msg: ParsecErrorKind::UnexpectedChar(a),
+                });
+            }
+        }
+        Ok(s.to_string())
     })
 }
 
@@ -207,7 +229,7 @@ fn test_parse_nonspace() {
 }
 
 pub fn nonspace() -> Parsec<String> {
-    fmap(many1(none_of(" \t\r\n".to_string())), |v| {
+    fmap(many1(none_of(" \t\r\n")), |v| {
         v.into_iter().collect::<String>()
     })
 }
