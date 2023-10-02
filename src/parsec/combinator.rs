@@ -1,9 +1,25 @@
+//! # Combinator
+//!
+//! Combinator submodule provides functions that combines parsers.
+//! for example, we use `between` to construct a parser that parses something between `left` and `right`.
+
 use crate::parsec::*;
-use std::{rc::Rc, str::Chars};
+use std::{error::Error, fmt::Display, rc::Rc, str::Chars};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ParsecError {
     pub(crate) msg: ParsecErrorKind,
+}
+
+impl Error for ParsecError {}
+
+impl Display for ParsecError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.msg {
+            ParsecErrorKind::UnexpectedEOF => write!(f, "Unexpected EOF"),
+            ParsecErrorKind::UnexpectedChar(c) => write!(f, "Unexpected char {}", c),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -12,6 +28,9 @@ pub enum ParsecErrorKind {
     UnexpectedChar(char),
 }
 
+/// A parser is a function that takes a `Chars` iterator and returns a `Result<T, ParsecError>`.
+/// the iterator is mutable because the parser may consume the input, but of course it will not
+/// modify the input.
 pub type Parsec<T> = Rc<dyn Fn(&mut Chars) -> Result<T, ParsecError>>;
 
 #[test]
@@ -21,6 +40,7 @@ fn test_satisfy() {
     assert_eq!(p(&mut input).unwrap(), '你');
 }
 
+/// the parser goes ahead regradless success or failure.
 pub fn satisfy(p: Rc<dyn Fn(char) -> bool>) -> Parsec<char> {
     Rc::new(move |input: &mut Chars| {
         let next = input.next().ok_or(ParsecError {
@@ -44,6 +64,8 @@ fn test_lookahead() {
     assert_eq!(input.next().unwrap(), '你');
 }
 
+/// the parser peeks the parse result, but do not consume the input.
+/// thus named `lookahead`.
 pub fn lookahead<T: 'static>(p: Parsec<T>) -> Parsec<T> {
     Rc::new(move |input: &mut Chars| {
         let mut input_clone = input.clone();
@@ -63,6 +85,7 @@ fn test_try_parse() {
     assert_eq!(input.next().unwrap(), '你');
 }
 
+/// the parser will not consume the input if it fails.
 pub fn try_parse<T: 'static>(p: Parsec<T>) -> Parsec<T> {
     Rc::new(move |input: &mut Chars| {
         let mut input_clone = input.clone();
@@ -90,6 +113,8 @@ fn test_choice() {
     );
 }
 
+/// the parser will try every parser in the vector, and return the first success.
+/// upon success, the input will be consumed.
 pub fn choice<T: 'static>(ps: Vec<Parsec<T>>) -> Parsec<T> {
     Rc::new(move |input: &mut Chars| {
         ps.clone().into_iter().map(try_parse).fold(
@@ -114,11 +139,14 @@ fn test_many() {
     );
 }
 
+/// the parser will try to parse the input as many times as possible.
+/// upon failure, the input will not be consumed.
 pub fn many<T: 'static>(p: Parsec<T>) -> Parsec<Vec<T>> {
     Rc::new(move |input: &mut Chars| {
         let mut result = vec![];
+        let many_parser = try_parse(p.clone());
         loop {
-            match try_parse(p.clone())(input) {
+            match many_parser(input) {
                 Ok(x) => result.push(x),
                 Err(_) => break,
             }
@@ -139,15 +167,17 @@ fn test_many1() {
     );
 }
 
+/// the parser will try to parse the input as many times as possible, but more than once
 pub fn many1(p: Parsec<char>) -> Parsec<Vec<char>> {
     Rc::new(move |input: &mut Chars| {
         let mut result = vec![];
-        match try_parse(p.clone())(input) {
+        let many1_parser = try_parse(p.clone());
+        match many1_parser(input) {
             Ok(x) => result.push(x),
             Err(e) => return Err(e),
         }
         loop {
-            match try_parse(p.clone())(input) {
+            match many1_parser(input) {
                 Ok(x) => result.push(x),
                 Err(_) => break,
             }
@@ -165,6 +195,7 @@ fn test_skip_many() {
     assert_eq!(p2(&mut input).unwrap(), '好');
 }
 
+/// the parser will skip all seq appearence of pattern p
 pub fn skip_many<T: 'static>(p: Parsec<T>) -> Parsec<()> {
     Rc::new(move |input: &mut Chars| {
         let many_parser = try_parse(p.clone());
@@ -187,6 +218,7 @@ fn test_skip_many1() {
     assert_eq!(p2(&mut input).unwrap(), '好');
 }
 
+/// the parser will skip all seq appearence of pattern p, but more than once
 pub fn skip_many1(p: Parsec<char>) -> Parsec<()> {
     Rc::new(move |input: &mut Chars| {
         let p_parser = try_parse(p.clone());
@@ -214,6 +246,7 @@ fn test_sep_by() {
     );
 }
 
+/// the parser will parse ps separated by seps
 pub fn sep_by<T: 'static, U: 'static>(p: Parsec<T>, sep: Parsec<U>) -> Parsec<Vec<T>> {
     Rc::new(move |input: &mut Chars| {
         let t_parser = try_parse(p.clone());
@@ -244,6 +277,7 @@ fn test_fmap() {
     assert_eq!(p(&mut input).unwrap(), 1);
 }
 
+/// the function can convert the result of a parser from type T to type U
 pub fn fmap<T: 'static, U: 'static>(p: Parsec<T>, f: fn(T) -> U) -> Parsec<U> {
     Rc::new(move |input: &mut Chars| p(input).map(f))
 }
@@ -255,6 +289,28 @@ fn test_discard() {
     assert_eq!(p(&mut input).unwrap(), ());
 }
 
+/// this function discards the result of a parser
 pub fn discard<T: 'static>(p: Parsec<T>) -> Parsec<()> {
     fmap(p, |_| ())
+}
+
+#[test]
+fn test_between() {
+    let mut input = "*page34|".chars();
+    let p = between(string("*page"), dec_num(), parse_char('|'));
+    assert_eq!(p(&mut input).unwrap(), 34);
+}
+
+/// this function parses something between left and right
+pub fn between<T: 'static, U: 'static, V: 'static>(
+    open: Parsec<T>,
+    p: Parsec<U>,
+    close: Parsec<V>,
+) -> Parsec<U> {
+    Rc::new(move |input: &mut Chars| {
+        open(input)?;
+        let result = p(input)?;
+        close(input)?;
+        Ok(result)
+    })
 }

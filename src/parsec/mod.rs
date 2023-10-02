@@ -1,10 +1,14 @@
 //! Parsec is a parsing combinator library for this project.
-
-pub mod char;
-pub use char::*;
+//!
+//! It provides a set of functions to create parsers.
+//! these functions give you a `parsec`, which is a parsing function.
+//! You can use `parsec` to parse a `Chars` iterator. It will return a `Result<T, ParsecError>`.
 
 pub mod combinator;
 pub use combinator::*;
+
+pub mod char;
+pub use char::*;
 
 use std::str::Chars;
 

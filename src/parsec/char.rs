@@ -1,3 +1,7 @@
+//! # Parsers for char/strings
+//!
+//! To convience us, I predefine some char/string parsers in this module.
+//! You can use them to parse chars or strings.
 use std::rc::Rc;
 
 use super::*;
@@ -34,6 +38,7 @@ pub(crate) fn test_space() {
     assert_eq!(p(&mut input).unwrap(), ' ');
 }
 
+/// space but not newline
 pub fn space() -> Parsec<char> {
     satisfy(Rc::new(move |x| x.is_whitespace() && x != '\n'))
 }

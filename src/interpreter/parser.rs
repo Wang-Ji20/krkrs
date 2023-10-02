@@ -1,10 +1,10 @@
 use crate::parsec::*;
-use std::{collections::HashMap, rc::Rc, str::Chars};
+use std::{collections::HashMap, error::Error, fs, rc::Rc, str::Chars};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Tag {
-    name: String,
-    attributes: HashMap<String, String>,
+    pub(crate) name: String,
+    pub(crate) attributes: HashMap<String, String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -14,14 +14,14 @@ pub enum Token {
     Text(String),
 }
 
-fn lift_tag(v: Vec<String>) -> Tag {
+fn lift_tag(v: Vec<String>) -> Token {
     let mut attributes = HashMap::new();
     let name = v[0].clone();
     for attr in v[1..].iter() {
         let attr: Vec<&str> = attr.split('=').collect();
         attributes.insert(attr[0].to_string(), attr[1].to_string());
     }
-    Tag { name, attributes }
+    Token::Tag(Tag { name, attributes })
 }
 
 #[test]
@@ -32,12 +32,11 @@ fn test_parse_page() {
 }
 
 fn parse_page() -> Parsec<Token> {
-    Rc::new(|input: &mut Chars| {
-        string("*page")(input)?;
-        let page_num = fmap(dec_num(), Token::Page)(input);
-        parse_char('|')(input)?;
-        page_num
-    })
+    between(
+        string("*page"),
+        fmap(dec_num(), Token::Page),
+        parse_char('|'),
+    )
 }
 
 #[test]
@@ -60,7 +59,7 @@ fn test_parse_line_tag() {
 fn parse_line_tag() -> Parsec<Token> {
     Rc::new(|input: &mut Chars| {
         parse_char('@')(input)?;
-        nonspaces()(input).map(lift_tag).map(Token::Tag)
+        nonspaces()(input).map(lift_tag)
     })
 }
 
@@ -78,21 +77,19 @@ fn test_parse_inlined_tag() {
 }
 
 fn parse_inlined_tag() -> Parsec<Token> {
-    Rc::new(|input: &mut Chars| {
-        parse_char('[')(input)?;
-        let result = many1(try_parse(none_of("]")))(input)
-            .map(|v| {
+    between(
+        parse_char('['),
+        fmap(many1(try_parse(none_of("]"))), |v| {
+            lift_tag(
                 v.iter()
                     .collect::<String>()
                     .split(" ")
                     .map(|s| s.to_string())
-                    .collect::<Vec<String>>()
-            })
-            .map(lift_tag)
-            .map(Token::Tag);
-        parse_char(']')(input)?;
-        result
-    })
+                    .collect::<Vec<String>>(),
+            )
+        }),
+        parse_char(']'),
+    )
 }
 
 #[test]
@@ -203,19 +200,40 @@ fn parse_token() -> Parsec<Token> {
 fn test_parse_tokens() {
     let mut input = "
     *page47|
-    @textoff
     @sestop file=se009 time=1500 nowait=true
-    @a2aT file=o小さな公園-(曇)
-    @play file=bgm05 time=0
-    @texton
     Illya and I are alone in the small park a little way from the shopping district.[lr]
-    Maybe all the children are at school or maybe such a small park isn’t popular anymore.[lr]
-    We start to talk in the empty winter park, bathed in a strangely tense atmosphere.
     @pg
     "
     .chars();
     let p = parse_tokens();
-    println!("{:?}", p(&mut input).unwrap());
+    assert_eq!(
+        p(&mut input).unwrap(),
+        vec![
+            Token::Page(47),
+            Token::Tag(Tag {
+                name: "sestop".to_string(),
+                attributes: {
+                    let mut map = HashMap::new();
+                    map.insert("file".to_string(), "se009".to_string());
+                    map.insert("time".to_string(), "1500".to_string());
+                    map.insert("nowait".to_string(), "true".to_string());
+                    map
+                }
+            }),
+            Token::Text(
+                "Illya and I are alone in the small park a little way from the shopping district."
+                    .to_string()
+            ),
+            Token::Tag(Tag {
+                name: "lr".to_string(),
+                attributes: HashMap::new(),
+            }),
+            Token::Tag(Tag {
+                name: "pg".to_string(),
+                attributes: HashMap::new(),
+            }),
+        ]
+    );
 }
 
 fn parse_delimiter() -> Parsec<()> {
@@ -227,4 +245,19 @@ fn parse_tokens() -> Parsec<Vec<Token>> {
         let result = sep_by(parse_token(), parse_delimiter())(input);
         result
     })
+}
+
+#[test]
+fn test_parse_ks() {
+    const KS: &str = "*page47|";
+    fs::write("test.ks", KS).unwrap();
+    let mut tokens = parse_ks("test.ks").unwrap();
+    fs::remove_file("test.ks").unwrap();
+    assert_eq!(tokens.next().unwrap(), Token::Page(47));
+}
+
+pub fn parse_ks(path: &str) -> Result<impl Iterator<Item = Token>, Box<dyn Error>> {
+    let input = fs::read_to_string(path)?;
+    let result = run_parser_str(parse_tokens(), input.as_str())?;
+    Ok(result.into_iter())
 }
