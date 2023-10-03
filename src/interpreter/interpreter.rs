@@ -2,7 +2,7 @@ use crate::interpreter::parser::*;
 use std::fmt::{self, Debug, Formatter};
 
 pub struct State {
-    page: i64,
+    label: Label,
     music: String,
     scene: Vec<String>,
     text: Vec<String>,
@@ -13,7 +13,7 @@ pub struct State {
 impl Debug for State {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("State")
-            .field("page", &self.page)
+            .field("label", &self.label)
             .field("music", &self.music)
             .field("scene", &self.scene)
             .field("text", &self.text)
@@ -24,13 +24,16 @@ impl Debug for State {
 #[derive(Debug)]
 pub enum Command {
     Preceed,
-    Choose(i64),
+    Choose(Label),
 }
 
 impl State {
     pub fn new_from_ks(filename: &str) -> State {
         let mut s = State {
-            page: 0,
+            label: Label {
+                label: String::new(),
+                heading: String::new(),
+            },
             music: String::new(),
             scene: Vec::new(),
             text: Vec::new(),
@@ -43,9 +46,10 @@ impl State {
 
     pub fn eval(&mut self) {
         while let Some(token) = self.tokens.next() {
+            self.cur_token = Some(token.clone());
             match token {
-                Token::Page(n) => {
-                    self.page = n;
+                Token::Label(l) => {
+                    self.label = l;
                 }
                 Token::Tag(tag) => match tag.name.as_str() {
                     "lr" | "pg" => break,
@@ -69,8 +73,8 @@ impl State {
                 }
                 self.eval();
             }
-            Command::Choose(n) => {
-                self.page = n;
+            Command::Choose(l) => {
+                self.label = l;
                 self.eval();
             }
         }
@@ -81,4 +85,24 @@ impl State {
 mod tests {
 
     use super::*;
+
+    /// This test only runs in my local machine.
+    #[ignore]
+    #[test]
+    fn test_state() {
+        let mut s = State::new_from_ks("public/lorerei.ks");
+        assert_eq!(s.text, vec!["I go outside with Illya."]);
+        s.eval_cmd(Command::Preceed);
+        assert_eq!(s.text, vec![
+            "I go outside with Illya.",
+            "We can’t spare the time to go shopping often, so we’ll have to push ourselves and buy about three days’ worth of groceries.\n"
+         ]);
+        s.eval_cmd(Command::Preceed);
+        assert_eq!(
+            s.text,
+            vec![
+               "“Then let’s buy a lot. What do you want, Illya? Well, we have to start with today’s lunch.”\n"
+            ]
+         )
+    }
 }

@@ -283,6 +283,33 @@ pub fn fmap<T: 'static, U: 'static>(p: Parsec<T>, f: fn(T) -> U) -> Parsec<U> {
 }
 
 #[test]
+fn test_bind() {
+    let mut input = "12".chars();
+    let p = bind(parse_char('1'), Rc::new(|y| parse_char('2')));
+    assert_eq!(p(&mut input).unwrap(), '2');
+}
+
+/// Monad m => m a -> (a -> m b) -> m b
+pub fn bind<T: 'static, U: 'static>(p: Parsec<T>, f: Rc<dyn Fn(T) -> Parsec<U>>) -> Parsec<U> {
+    Rc::new(move |input: &mut Chars| {
+        let x = p(input)?;
+        f(x)(input)
+    })
+}
+
+#[test]
+fn test_pure() {
+    let mut input = "".chars();
+    let p = pure(1);
+    assert_eq!(p(&mut input).unwrap(), 1);
+}
+
+/// this function returns a parser that always returns x
+pub fn pure<T: 'static + Clone>(x: T) -> Parsec<T> {
+    Rc::new(move |_: &mut Chars| Ok(x.clone()))
+}
+
+#[test]
 fn test_discard() {
     let mut input = "1".chars();
     let p = discard(parse_char('1'));
@@ -313,4 +340,65 @@ pub fn between<T: 'static, U: 'static, V: 'static>(
         close(input)?;
         Ok(result)
     })
+}
+
+#[test]
+fn test_optional() {
+    let mut input = "你好".chars();
+    let p = optional(parse_char('你'));
+    assert_eq!(p(&mut input).unwrap(), Some('你'));
+    assert_eq!(p(&mut input).unwrap(), None);
+}
+
+/// does not consume the input if the parser fails
+pub fn optional<T: 'static>(p: Parsec<T>) -> Parsec<Option<T>> {
+    Rc::new(move |input: &mut Chars| {
+        let mut input_clone = input.clone();
+        match p(&mut input_clone) {
+            Ok(x) => {
+                *input = input_clone;
+                Ok(Some(x))
+            }
+            Err(_) => Ok(None),
+        }
+    })
+}
+
+#[macro_export]
+macro_rules! mkpc {
+    ($binding:ident <- $x:expr; $($y:tt)*) => {
+        bind($x, Rc::new(move |$binding| { mkpc!($($y)*) }))
+    };
+
+    ($x:expr; $($y:tt)*) => {
+        bind($x, Rc::new(move |_| { mkpc!($($y)*) }))
+    };
+
+    ($st:stmt; $($y:tt)*) => {{
+        $st;
+        mkpc!($($y)*)
+    }};
+
+    (return $x:expr) => {
+        pure($x)
+    };
+
+    ($x:expr) => {
+        $x
+    };
+
+    () => {}
+}
+
+#[test]
+fn test_pc() {
+    let mut input = "12|3".chars();
+    let p: Parsec<u8> = mkpc![
+        x <- parse_char('1');
+        y <- parse_char('2');
+        parse_char('|');
+        z <- parse_char('3');
+        return x.to_digit(10).unwrap() as u8 + y.to_digit(10).unwrap() as u8 + z.to_digit(10).unwrap() as u8
+    ];
+    assert_eq!(p(&mut input).unwrap(), 6);
 }

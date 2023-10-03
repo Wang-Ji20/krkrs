@@ -1,15 +1,21 @@
 use crate::parsec::*;
 use std::{collections::HashMap, error::Error, fs, rc::Rc, str::Chars};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Tag {
     pub(crate) name: String,
     pub(crate) attributes: HashMap<String, String>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Label {
+    pub(crate) label: String,
+    pub(crate) heading: String,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token {
-    Page(i64),
+    Label(Label),
     Tag(Tag),
     Text(String),
 }
@@ -25,18 +31,41 @@ fn lift_tag(v: Vec<String>) -> Token {
 }
 
 #[test]
-fn test_parse_page() {
+fn test_parse_label() {
     let mut input = "*page12|".chars();
-    let p = parse_page();
-    assert_eq!(p(&mut input).unwrap(), Token::Page(12));
+    let p = parse_label();
+    assert_eq!(
+        p(&mut input).unwrap(),
+        Token::Label(Label {
+            label: "page12".to_string(),
+            heading: "page12".to_string(),
+        })
+    );
 }
 
-fn parse_page() -> Parsec<Token> {
-    between(
-        string("*page"),
-        fmap(dec_num(), Token::Page),
-        parse_char('|'),
-    )
+#[test]
+fn test_parse_label_heading() {
+    let mut input = "*page12|wakeup".chars();
+    let p = parse_label();
+    assert_eq!(
+        p(&mut input).unwrap(),
+        Token::Label(Label {
+            label: "page12".to_string(),
+            heading: "wakeup".to_string(),
+        })
+    );
+}
+
+fn parse_label() -> Parsec<Token> {
+    Rc::new(|input: &mut Chars| {
+        let label = between(parse_char('*'), string_none_of("|"), parse_char('|'))(input)?;
+        let heading = if let Ok(Some(heading)) = optional(nonspace())(input) {
+            heading
+        } else {
+            label.clone()
+        };
+        Ok(Token::Label(Label { label, heading }))
+    })
 }
 
 #[test]
@@ -56,11 +85,89 @@ fn test_parse_line_tag() {
     );
 }
 
+#[test]
+fn test_parse_quoted_tag() {
+    let mut input = "@eval exp=\"sf.scriptresname = '桜ルート十二日目'\"".chars();
+    let p = parse_line_tag();
+    assert_eq!(
+        p(&mut input).unwrap(),
+        Token::Tag(Tag {
+            name: "eval".to_string(),
+            attributes: {
+                let mut map = HashMap::new();
+                map.insert(
+                    "exp".to_string(),
+                    "sf.scriptresname = '桜ルート十二日目'".to_string(),
+                );
+                map
+            }
+        })
+    );
+}
+
 fn parse_line_tag() -> Parsec<Token> {
     Rc::new(|input: &mut Chars| {
         parse_char('@')(input)?;
-        nonspaces()(input).map(lift_tag)
+        let name = word()(input)?;
+        spaces()(input)?;
+        let attributes = sep_by(parse_key_value(), spaces())(input)?
+            .into_iter()
+            .collect::<HashMap<String, String>>();
+        Ok(Token::Tag(Tag { name, attributes }))
     })
+}
+
+#[test]
+fn test_parse_key_value() {
+    let mut input = "a=2".chars();
+    let p = parse_key_value();
+    assert_eq!(p(&mut input).unwrap(), ("a".to_string(), "2".to_string()));
+}
+
+#[test]
+fn test_parse_quoted_key_value() {
+    let mut input = "exp=\"sf.scriptresname = '桜ルート十二日目'\"".chars();
+    let p = parse_key_value();
+    assert_eq!(
+        p(&mut input).unwrap(),
+        (
+            "exp".to_string(),
+            "sf.scriptresname = '桜ルート十二日目'".to_string()
+        )
+    );
+}
+
+fn parse_key_value() -> Parsec<(String, String)> {
+    Rc::new(|input: &mut Chars| {
+        let key = string_none_of("= \r\t\n")(input)?;
+        parse_char('=')(input)?;
+        let value = quoted_string()(input)?;
+        Ok((key, value))
+    })
+}
+
+#[test]
+fn test_quoted_string() {
+    let mut input = "\"sf.scriptresname = '桜ルート十二日目'\"".chars();
+    let p = quoted_string();
+    assert_eq!(
+        p(&mut input).unwrap(),
+        "sf.scriptresname = '桜ルート十二日目'".to_string()
+    );
+}
+
+#[test]
+fn test_quoted_string_but_unquoted() {
+    let mut input = "2".chars();
+    let p = quoted_string();
+    assert_eq!(p(&mut input).unwrap(), "2".to_string());
+}
+
+fn quoted_string() -> Parsec<String> {
+    choice(vec![
+        between(parse_char('"'), string_none_of("\""), parse_char('"')),
+        string_none_of(" \r\t\n"),
+    ])
 }
 
 #[test]
@@ -154,7 +261,13 @@ fn test_parse_token() {
     let text = "Illya and I are alone in the small park a little way from the shopping district.";
 
     let p = parse_token();
-    assert_eq!(p(&mut page.chars()).unwrap(), Token::Page(47));
+    assert_eq!(
+        p(&mut page.chars()).unwrap(),
+        Token::Label(Label {
+            label: "page47".to_string(),
+            heading: "page47".to_string()
+        })
+    );
     assert_eq!(
         p(&mut line_tag.chars()).unwrap(),
         Token::Tag(Tag {
@@ -188,7 +301,7 @@ fn parse_token() -> Parsec<Token> {
     Rc::new(|input: &mut Chars| {
         spaces_and_newlines()(input)?;
         choice(vec![
-            parse_page(),
+            parse_label(),
             parse_line_tag(),
             parse_inlined_tag(),
             parse_text(),
@@ -209,7 +322,10 @@ fn test_parse_tokens() {
     assert_eq!(
         p(&mut input).unwrap(),
         vec![
-            Token::Page(47),
+            Token::Label(Label {
+                label: "page47".to_string(),
+                heading: "page47".to_string()
+            }),
             Token::Tag(Tag {
                 name: "sestop".to_string(),
                 attributes: {
@@ -236,6 +352,42 @@ fn test_parse_tokens() {
     );
 }
 
+#[test]
+fn test_parse_tokens_hard() {
+    let mut input = "@download id=0000783
+*page0|&f.scripttitle
+@eval exp=\"sf.scriptresname = '桜ルート十二日目'\"";
+    let p = parse_tokens();
+    assert_eq!(
+        p(&mut input.chars()).unwrap(),
+        vec![
+            Token::Tag(Tag {
+                name: "download".to_string(),
+                attributes: {
+                    let mut map = HashMap::new();
+                    map.insert("id".to_string(), "0000783".to_string());
+                    map
+                }
+            }),
+            Token::Label(Label {
+                label: "page0".to_string(),
+                heading: "&f.scripttitle".to_string()
+            }),
+            Token::Tag(Tag {
+                name: "eval".to_string(),
+                attributes: {
+                    let mut map = HashMap::new();
+                    map.insert(
+                        "exp".to_string(),
+                        "sf.scriptresname = '桜ルート十二日目'".to_string(),
+                    );
+                    map
+                }
+            }),
+        ]
+    );
+}
+
 fn parse_delimiter() -> Parsec<()> {
     choice(vec![newline(), discard(lookahead(one_of("@[")))])
 }
@@ -253,7 +405,13 @@ fn test_parse_ks() {
     fs::write("test.ks", KS).unwrap();
     let mut tokens = parse_ks("test.ks").unwrap();
     fs::remove_file("test.ks").unwrap();
-    assert_eq!(tokens.next().unwrap(), Token::Page(47));
+    assert_eq!(
+        tokens.next().unwrap(),
+        Token::Label(Label {
+            label: "page47".to_string(),
+            heading: "page47".to_string()
+        })
+    );
 }
 
 pub fn parse_ks(path: &str) -> Result<impl Iterator<Item = Token>, Box<dyn Error>> {

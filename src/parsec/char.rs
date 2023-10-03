@@ -266,3 +266,14 @@ fn test_words() {
 pub fn words() -> Parsec<Vec<String>> {
     sep_by(word(), space())
 }
+
+#[test]
+fn test_string_none_of() {
+    let mut input = "abuhskh hjjh1hh".chars();
+    let p = string_none_of(" ");
+    assert_eq!(p(&mut input).unwrap(), "abuhskh".to_string());
+}
+
+pub fn string_none_of(s: &'static str) -> Parsec<String> {
+    fmap(many1(none_of(s)), |v| v.into_iter().collect::<String>())
+}
