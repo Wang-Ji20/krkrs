@@ -1,4 +1,4 @@
-use crate::parsec::*;
+use crate::{parsec::*};
 use std::{collections::HashMap, error::Error, fs, rc::Rc, str::Chars};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -195,7 +195,7 @@ fn parse_inlined_tag() -> Parsec<Token> {
                     .collect::<Vec<String>>(),
             )
         }),
-        parse_char(']'),
+        lookahead(parse_char(']')),
     )
 }
 
@@ -389,7 +389,11 @@ fn test_parse_tokens_hard() {
 }
 
 fn parse_delimiter() -> Parsec<()> {
-    choice(vec![newline(), discard(lookahead(one_of("@[")))])
+    choice(vec![
+        newline(),
+        discard(lookahead(one_of("@["))),
+        discard(one_of("]")),
+    ])
 }
 
 fn parse_tokens() -> Parsec<Vec<Token>> {
@@ -417,5 +421,42 @@ fn test_parse_ks() {
 pub fn parse_ks(path: &str) -> Result<impl Iterator<Item = Token>, Box<dyn Error>> {
     let input = fs::read_to_string(path)?;
     let result = run_parser_str(parse_tokens(), input.as_str())?;
+    Ok(result.into_iter())
+}
+
+#[test]
+fn test_parse_ks_string() {
+    let input = "@say storage=sak1209_shi_0010
+    “O[line3]Oh yeah. It’s good if it’s decided. Sakura makes white stew, so let’s go look at the chicken meat.”";
+    let tokens = parse_ks_string(input).unwrap();
+    assert_eq!(
+        tokens.collect::<Vec<Token>>(),
+        vec![
+            Token::Tag(Tag {
+                name: "say".to_string(),
+                attributes: {
+                    let mut map = HashMap::new();
+                    map.insert("storage".to_string(), "sak1209_shi_0010".to_string());
+                    map
+                }
+            }),
+            Token::Text(
+                "“O"
+                    .to_string()
+            ),
+            Token::Tag(Tag {
+                name: "line3".to_string(),
+                attributes: HashMap::new(),
+            }),
+            Token::Text(
+                "Oh yeah. It’s good if it’s decided. Sakura makes white stew, so let’s go look at the chicken meat.”"
+                    .to_string()
+            ),
+        ]
+    );
+}
+
+pub fn parse_ks_string(input: &str) -> Result<impl Iterator<Item = Token>, Box<dyn Error>> {
+    let result = run_parser_str(parse_tokens(), input)?;
     Ok(result.into_iter())
 }

@@ -1,32 +1,44 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
+import * as krkrs from 'krkrs';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [krkri, setKrkrs] = useState<krkrs.State>();
+  const [loaded, setLoaded] = useState(false);
+  const [text, setText] = useState("not loaded");
+
+  async function loadKrkrs() {
+    const k = await krkrs.State.new_from_web('lorerei.ks');
+    setKrkrs(k);
+    setLoaded(true);
+    setText(k.render());
+  }
+
+  const resetText = () => {
+    if (loaded) setText(krkri!.render());
+  }
 
   return (
     <>
-      <div>
-        <a href="https://vitejs.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
+      <button onClick={loadKrkrs}>
+        Start game
+      </button>
+      <h1>krkrs</h1>
       <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
+        <button onClick={() => {
+          if (!loaded) {
+            return;
+          }
+          krkri?.eval_cmd(
+            krkrs.Command.new_preceed()
+          );
+          resetText();
+        }}>
+          next
         </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
       </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
+      <p>
+        {text}
       </p>
     </>
   )
