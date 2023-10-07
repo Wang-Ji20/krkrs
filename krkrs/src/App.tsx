@@ -23,7 +23,7 @@ function App() {
       <button onClick={loadKrkrs}>
         Start game
       </button>
-      <h1>krkrs</h1>
+      <h1 className='underline'>krkrs</h1>
       <div className="card">
         <button onClick={() => {
           if (!loaded) {
