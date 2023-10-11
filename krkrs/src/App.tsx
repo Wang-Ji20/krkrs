@@ -1,45 +1,28 @@
-import { useState } from 'react'
-import * as krkrs from 'krkrs';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+import './index.css'
+import PlayView from './view/PlayView.tsx'
+import RootView from './view/rootView.tsx'
+import React from 'react';
+
+const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <RootView />
+  },
+  {
+    path: "game",
+    element: <PlayView />
+  }
+])
+
 
 function App() {
-  const [krkri, setKrkrs] = useState<krkrs.State>();
-  const [loaded, setLoaded] = useState(false);
-  const [text, setText] = useState("not loaded");
-
-  async function loadKrkrs() {
-    const k = await krkrs.State.new_from_web('lorerei.ks');
-    setKrkrs(k);
-    setLoaded(true);
-    setText(k.render());
-  }
-
-  const resetText = () => {
-    if (loaded) setText(krkri!.render());
-  }
-
   return (
-    <>
-      <button onClick={loadKrkrs}>
-        Start game
-      </button>
-      <h1 className='underline'>krkrs</h1>
-      <div className="card">
-        <button onClick={() => {
-          if (!loaded) {
-            return;
-          }
-          krkri?.eval_cmd(
-            krkrs.Command.new_preceed()
-          );
-          resetText();
-        }}>
-          next
-        </button>
+    <React.StrictMode>
+      <div className='w-screen h-screen app'>
+        <RouterProvider router={router} />
       </div>
-      <p>
-        {text}
-      </p>
-    </>
+    </React.StrictMode>
   )
 }
 

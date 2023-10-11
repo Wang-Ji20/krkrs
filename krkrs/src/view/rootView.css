@@ -1,0 +1,8 @@
+.bg-root {
+    background: linear-gradient(45deg, #000000 25%,#092F4C 75%);
+}
+
+.title-color {
+    color: #e0e0e0;
+    text-shadow: #37b4f3b7 0px 0px 10px;
+}

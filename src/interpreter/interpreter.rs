@@ -73,7 +73,7 @@ impl State {
         utils::set_panic_hook();
         let mut opts = RequestInit::new();
         opts.method("GET");
-        let url = format!("/public/{}", url);
+        let url = format!("/{}", url);
         let request = Request::new_with_str_and_init(&url, &opts).unwrap();
 
         let window = web_sys::window().unwrap();

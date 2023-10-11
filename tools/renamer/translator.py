@@ -54,6 +54,7 @@ def make_translator(from_lang: str = 'ja', to_lang: str = 'en', errata: str = ""
         aggregated_assets = '\n'.join(
             [asset for (asset, _) in translate_table])
         # ... and I cannot send too big requests to translators at once,
+        # FIXME: change a way to segment the text, have bugs here.
         segments = [aggregated_assets[i:i + 1000]
                     for i in range(0, len(aggregated_assets), 1000)]
         segmented_trans = []
