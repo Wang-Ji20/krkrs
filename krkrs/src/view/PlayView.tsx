@@ -6,39 +6,42 @@ import ImageDisplay from './component/ImageDisplay';
 
 function PlayView() {
   const [krkri, setKrkrs] = useState<krkrs.State>();
-  const [loaded, setLoaded] = useState(false);
-  const [text, setText] = useState("not loaded");
+  const [text, setText] = useState(["not loaded"]);
+  const [image, setImage] = useState("not loaded");
 
   async function loadKrkrs() {
     const k = await krkrs.State.new_from_web('lorerei.ks');
     setKrkrs(k);
-    setLoaded(true);
-    setText(k.render());
+    loadText();
+    loadImage();
   }
 
-  const resetText = () => {
-    if (loaded) setText(krkri!.render());
+  async function loadText() {
+    if (!krkri) return;
+    for (let index = 0; index < krkri.render_text_len(); index++) {
+      text[index] = krkri.render_text(index);
+    }
+    setText(text);
+  }
+
+  async function loadImage() {
+    if (!krkri) return;
+    setImage(krkri.render_image(0));
   }
 
   loadKrkrs();
   const _next = () => {
-    if (!loaded) {
-      return;
-    }
     krkri?.eval_cmd(
       krkrs.Command.new_preceed()
     );
-    resetText();
+    loadText();
   }
 
   return (
     <>
       <div className="play-view">
-        <ImageDisplay imageSrc={"/bgimage/o衛宮邸外観-(昼).png"} />
-        <TextDisplay text={[
-          "I go outside with Illya.",
-          "We can’t spare the time to go shopping often, so we’ll have to push ourselves and buy about three days’ worth of groceries.",
-        ]} />
+        <ImageDisplay imageSrc={image} />
+        <TextDisplay text={text} />
       </div>
     </>
   )

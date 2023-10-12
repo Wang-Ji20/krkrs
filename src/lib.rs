@@ -3,6 +3,8 @@ pub mod utils;
 pub mod interpreter;
 mod parsec;
 
+mod vfs;
+
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]

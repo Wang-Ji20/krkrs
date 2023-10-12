@@ -50,6 +50,10 @@ pub enum CommandKind {
     Choose,
 }
 
+//
+// data: rust side game state ----- render() ----> ts side presentation (NO STATE!!!)
+//
+
 #[wasm_bindgen]
 impl State {
     pub fn new_from_ks(filename: &str) -> State {
@@ -104,19 +108,42 @@ impl State {
     pub fn eval(&mut self) {
         while let Some(token) = self.tokens.next() {
             self.cur_token = Some(token.clone());
-            match token {
-                Token::Label(l) => {
-                    self.label = l;
-                }
-                Token::Tag(tag) => match tag.name.as_str() {
-                    "lr" | "pg" => break,
-                    _ => continue,
-                },
-                Token::Text(text) => {
-                    self.text.push(text);
-                }
+            if self.eval_token(token) {
+                break;
             }
         }
+    }
+
+    fn eval_token(&mut self, token: Token) -> bool {
+        match token {
+            Token::Label(l) => {
+                self.label = l;
+                false
+            }
+            Token::Tag(tag) => self.eval_tag(tag),
+            Token::Text(text) => {
+                self.text.push(text);
+                false
+            }
+        }
+    }
+
+    fn eval_tag(&mut self, tag: Tag) -> bool {
+        match tag.name.as_str() {
+            "lr" | "pg" => true,
+            "bg" => self.eval_bg(tag),
+            _ => false,
+        }
+    }
+
+    fn eval_bg(&mut self, tag: Tag) -> bool {
+        let image_src = format!("/bgimage/{}.png", tag.attributes["file"]);
+        if self.scene.len() < 1 {
+            self.scene.push(image_src);
+        } else {
+            self.scene[0] = image_src;
+        };
+        false
     }
 
     pub fn eval_cmd(&mut self, cmd: Command) {
@@ -134,13 +161,20 @@ impl State {
         }
     }
 
-    pub fn render(&self) -> String {
-        let mut s = String::new();
-        for line in &self.text {
-            s.push_str(line);
-            s.push('\n');
-        }
-        s
+    pub fn render_text_len(&self) -> usize {
+        self.text.len()
+    }
+
+    pub fn render_text(&self, i: usize) -> String {
+        self.text[i].clone()
+    }
+
+    pub fn render_image_len(&self) -> usize {
+        self.scene.len()
+    }
+
+    pub fn render_image(&self, i: usize) -> String {
+        self.scene[i].clone()
     }
 }
 
@@ -155,6 +189,7 @@ mod tests {
     fn test_state() {
         let mut s = State::new_from_ks("public/lorerei.ks");
         assert_eq!(s.text, vec!["I go outside with Illya."]);
+        assert_eq!(s.scene, vec!["/bgimage/o衛宮邸外観-(昼).png"]);
         s.eval_cmd(Command {
             kind: CommandKind::Preceed,
             data: None,
@@ -164,7 +199,7 @@ mod tests {
             "We can’t spare the time to go shopping often, so we’ll have to push ourselves and buy about three days’ worth of groceries.\n"
          ]);
         s.eval_cmd(Command {
-            kind: CommandKind::Choose,
+            kind: CommandKind::Preceed,
             data: None,
         });
         assert_eq!(
