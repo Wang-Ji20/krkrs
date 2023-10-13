@@ -26,30 +26,6 @@ impl Debug for State {
     }
 }
 
-#[derive(Debug, Clone)]
-#[wasm_bindgen]
-pub struct Command {
-    pub kind: CommandKind,
-    data: Option<String>,
-}
-
-#[wasm_bindgen]
-impl Command {
-    pub fn new_preceed() -> Command {
-        Command {
-            kind: CommandKind::Preceed,
-            data: None,
-        }
-    }
-}
-
-#[wasm_bindgen]
-#[derive(Debug, Copy, Clone)]
-pub enum CommandKind {
-    Preceed,
-    Choose,
-}
-
 //
 // data: rust side game state ----- render() ----> ts side presentation (NO STATE!!!)
 //
@@ -146,18 +122,17 @@ impl State {
         false
     }
 
-    pub fn eval_cmd(&mut self, cmd: Command) {
-        match cmd.kind {
-            CommandKind::Preceed => {
+    pub fn eval_cmd(&mut self, command: &str) {
+        match command {
+            "MouseClick" | "Enter" => {
                 if let Some(Token::Tag(tag)) = &self.cur_token {
                     if tag.name == "pg" {
-                        self.scene.clear();
                         self.text.clear();
                     }
                 }
                 self.eval();
             }
-            CommandKind::Choose => {}
+            _ => {}
         }
     }
 
@@ -190,18 +165,12 @@ mod tests {
         let mut s = State::new_from_ks("public/lorerei.ks");
         assert_eq!(s.text, vec!["I go outside with Illya."]);
         assert_eq!(s.scene, vec!["/bgimage/o衛宮邸外観-(昼).png"]);
-        s.eval_cmd(Command {
-            kind: CommandKind::Preceed,
-            data: None,
-        });
+        s.eval_cmd("MouseClick");
         assert_eq!(s.text, vec![
             "I go outside with Illya.",
             "We can’t spare the time to go shopping often, so we’ll have to push ourselves and buy about three days’ worth of groceries.\n"
          ]);
-        s.eval_cmd(Command {
-            kind: CommandKind::Preceed,
-            data: None,
-        });
+        s.eval_cmd("Enter");
         assert_eq!(
             s.text,
             vec![
