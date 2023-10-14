@@ -1,9 +1,13 @@
 pub mod utils;
 
-pub mod interpreter;
+mod interpreter;
 mod parsec;
 
 mod vfs;
+
+mod presentation;
+
+pub mod interface;
 
 use wasm_bindgen::prelude::*;
 

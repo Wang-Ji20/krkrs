@@ -1,11 +1,10 @@
-use wasm_bindgen::{prelude::wasm_bindgen, JsCast};
+use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit};
 
-use crate::{interpreter::parser::*, utils};
+use crate::interpreter::parser::*;
 use std::fmt::{self, Debug, Formatter};
 
-#[wasm_bindgen]
 pub struct State {
     label: Label,
     music: String,
@@ -26,14 +25,14 @@ impl Debug for State {
     }
 }
 
-//
-// data: rust side game state ----- render() ----> ts side presentation (NO STATE!!!)
-//
+#[derive(Debug, Clone)]
+pub struct RenderContext {
+    pub scene: Vec<String>,
+    pub text: Vec<String>,
+}
 
-#[wasm_bindgen]
 impl State {
     pub fn new_from_ks(filename: &str) -> State {
-        utils::set_panic_hook();
         let mut s = State {
             label: Label {
                 label: String::new(),
@@ -50,7 +49,6 @@ impl State {
     }
 
     pub async fn new_from_web(url: &str) -> State {
-        utils::set_panic_hook();
         let mut opts = RequestInit::new();
         opts.method("GET");
         let url = format!("/{}", url);
@@ -136,20 +134,11 @@ impl State {
         }
     }
 
-    pub fn render_text_len(&self) -> usize {
-        self.text.len()
-    }
-
-    pub fn render_text(&self, i: usize) -> String {
-        self.text[i].clone()
-    }
-
-    pub fn render_image_len(&self) -> usize {
-        self.scene.len()
-    }
-
-    pub fn render_image(&self, i: usize) -> String {
-        self.scene[i].clone()
+    pub(crate) fn get_render_ctx(&self) -> RenderContext {
+        RenderContext {
+            scene: self.scene.clone(),
+            text: self.text.clone(),
+        }
     }
 }
 

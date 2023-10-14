@@ -1,4 +1,4 @@
-use crate::{parsec::*};
+use crate::parsec::*;
 use std::{collections::HashMap, error::Error, fs, rc::Rc, str::Chars};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -172,7 +172,7 @@ fn quoted_string() -> Parsec<String> {
 
 #[test]
 fn test_parse_inlined_tag() {
-    let mut input = "[lr]";
+    let input = "[lr]";
     let p = parse_inlined_tag();
     assert_eq!(
         p(&mut input.chars()).unwrap(),
@@ -217,10 +217,10 @@ fn test_parse_text_rune() {
 
 fn parse_text_rune() -> Parsec<char> {
     choice(vec![
-        fmap(string("[["), |v: String| '['),
+        fmap(string("[["), |_: String| '['),
         none_of("@[]"),
-        fmap(string("]]"), |v| ']'),
-        fmap(string("@@"), |v| '@'),
+        fmap(string("]]"), |_| ']'),
+        fmap(string("@@"), |_| '@'),
     ])
 }
 
@@ -354,7 +354,7 @@ fn test_parse_tokens() {
 
 #[test]
 fn test_parse_tokens_hard() {
-    let mut input = "@download id=0000783
+    let input = "@download id=0000783
 *page0|&f.scripttitle
 @eval exp=\"sf.scriptresname = '桜ルート十二日目'\"";
     let p = parse_tokens();

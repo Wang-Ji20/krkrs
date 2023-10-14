@@ -4,69 +4,54 @@ import './playView.css'
 import TextDisplay from './component/TextDisplay';
 import ImageDisplay from './component/ImageDisplay';
 
+type RenderContext = {
+    'text': string[];
+    'scene': string[];
+}
+
 function PlayView() {
-  const [krkri, setKrkrs] = useState<krkrs.State>();
-  const [_temp, setForceUpdate] = useState(true);
+    const [krkri, setKrkrs] = useState<krkrs.App>();
+    const [text, setText] = useState(['unloaded']);
+    const [image, setImage] = useState('unloaded');
 
-  async function initKrkrs() {
-    if (krkri) {
-      return;
+    async function initKrkrs() {
+        if (krkri) {
+            return;
+        }
+        const k = await krkrs.App.new_web_from_url('lorerei.ks', (ctx: RenderContext) => {
+            console.log('rendering');
+            console.log(ctx);
+            setText(ctx['text']);
+            setImage(ctx['scene'][0]);
+        });
+        setKrkrs(k);
     }
-    const k = await krkrs.State.new_from_web('lorerei.ks');
-    setKrkrs(k);
-    loadAssets();
-  }
 
-  function loadText() {
-    if (!krkri) return;
-    const text: string[] = [];
-    for (let index = 0; index < krkri.render_text_len(); index++) {
-      text[index] = krkri.render_text(index);
-    }
-    return text;
-  }
+    initKrkrs();
 
-  function loadImage() {
-    if (!krkri) return;
-    return krkri.render_image(0);
-  }
-
-  function loadAssets() {
-    loadText();
-    loadImage();
-  }
-
-  initKrkrs();
-
-  function forceUpdate() {
-    setForceUpdate(!_temp);
-  }
-
-  useEffect(
-    () => {
-      const handleKey = (e: KeyboardEvent) => {
-        console.log(e.key)
-        krkri?.eval_cmd(e.key)
-        forceUpdate();
-      }
-      document.addEventListener('keyup', handleKey);
-
-      return () => { document.removeEventListener('keyup', handleKey) }
-    }
-  )
-
-  return (
-    <>
-      <div className="play-view" onMouseDown={
+    useEffect(
         () => {
-          krkri?.eval_cmd("MouseClick")
-          forceUpdate();
-        }}>
-        <ImageDisplay imageSrc={loadImage() ?? 'unloaded'} />
-        <TextDisplay text={loadText() ?? ['unloaded']} />
-      </div>
-    </>
-  )
+            const handleKey = (e: KeyboardEvent) => {
+                krkri?.handle_web_input(e.key)
+            }
+            document.addEventListener('keyup', handleKey);
+
+            return () => { document.removeEventListener('keyup', handleKey) }
+        }
+    )
+
+    return (
+        <>
+            <div className="play-view" onMouseDown={
+                (e) => {
+                    e.preventDefault();
+                    krkri?.handle_web_input("MouseClick")
+                }}>
+                <ImageDisplay imageSrc={image} />
+                <TextDisplay text={text} />
+            </div>
+        </>
+    )
 }
 
 export default PlayView

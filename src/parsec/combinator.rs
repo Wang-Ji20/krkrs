@@ -285,7 +285,7 @@ pub fn fmap<T: 'static, U: 'static>(p: Parsec<T>, f: fn(T) -> U) -> Parsec<U> {
 #[test]
 fn test_bind() {
     let mut input = "12".chars();
-    let p = bind(parse_char('1'), Rc::new(|y| parse_char('2')));
+    let p = bind(parse_char('1'), Rc::new(|_| parse_char('2')));
     assert_eq!(p(&mut input).unwrap(), '2');
 }
 
